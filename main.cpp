@@ -17,14 +17,15 @@
 #include <opencv2/videoio.hpp>
 #include <iostream>
 // Default speed of the motors, this is modified by the PID output
-#define leftMotorBaseSpeed 27
-#define rightMotorBaseSpeed 27
+int leftMotorBaseSpeed=25;
+int rightMotorBaseSpeed=25;
+
 
 // Speed limits of the motors
 #define min_speed 10
 #define max_speed 80
-#define servopin 29
 
+#define servopin 29
 #define Trig 21
 #define Echo 22
 
@@ -35,35 +36,44 @@
 #define LCD_D6  5               //Data pin 6
 #define LCD_D7  4               //Data pin 7
 
-
+float disMeasure();
 using namespace cv;
 using namespace std;
-int white;
 
-int colordetection(VideoCapture cap,Mat S);
+int white;
 float errorr, errorSum, errorOld;  // Variables for the PID loop
 int leftMotorSpeed, rightMotorSpeed; // Variables to hold the current motor speed (+-100%)
 
 float Kp, Ki, Kd; // Variables to store the PID constants
 int robot;
 char speedstring[50];
+
+int constrain(int speed);
+float PID(float lineDist);
+void stop(void);
+
+int colordetection(VideoCapture cap,Mat S);
+int calculate_error(VideoCapture cap,Mat S,int,int,int,int,int,int);
+int templatematching(Mat outPic);
+int Symbol(VideoCapture cap,Mat S);
+
+int line=0;
+
 void servoHeadUp();
 void servoHeadDown();
 
-void stop(void);
-//void runForward(int left_speed, int right_speed);
-//void turnLeft(int left_speed, int right_speed);
-//void turnRight(int left_speed, int right_speed);
-int constrain(int speed);
-float PID(float lineDist);
-int calculate_error(VideoCapture cap,Mat S,int,int,int,int,int,int);
-
-int templatematching(Mat outPic);
-int Symbol(VideoCapture cap,Mat S);
-int Trafficlight(VideoCapture cap);
-
 Point findContourCentre(std::vector<cv::Point> contour);
+
 Point2f srcPoints[4], dstPoints[4];
+
+
+int Trafficlight(VideoCapture cap);
+float disMeasure();
+
+int colordetection_blue(VideoCapture cap,Mat S);
+int colordetection_green(VideoCapture cap,Mat S);
+int colordetection_yellow(VideoCapture cap,Mat S);
+int colordetection_red(VideoCapture cap,Mat S);
 
 int main(){
 
@@ -79,30 +89,36 @@ int main(){
     errorr = 0;    // Initialise error variables
     errorSum = 0;
     errorOld = 0;
-    Kp = 0.35;
-    Ki = 0
+    Kp = 0.3
     ;
+    Ki = 0;
     Kd = 0.08;
 
     int pixel_error;
     int lcd;
+
     if (lcd = lcdInit (2, 16, 4, LCD_RS, LCD_E ,LCD_D4 , LCD_D5, LCD_D6,LCD_D7,0,0,0,0))
     {
         printf ("lcdInit failed! \n");
         return -1 ;
     }
 
+
+
+
     pinMode(Echo, INPUT);
     pinMode(Trig, OUTPUT);
 
 
     //runForward(leftMotorBaseSpeed, rightMotorBaseSpeed);
+
     int triangle=0;
     int circle=0;
     int square=0;
 
     int counter=0;
-    int symbol;
+    int line=1;
+
 
     VideoCapture cap;
     cap.open(0);
@@ -112,14 +128,102 @@ int main(){
     while(1){
 
 
+        if(line==1)
+        {
+            int color_line=colordetection_blue(cap,S);
+            cout<<"color_line"<<color_line<<endl;
+            if(color_line==2)
+            {
+                Kp = 0.4;
+                pixel_error=calculate_error(cap,S,70,110,55,150,255,120);
+                Kp = 0.28;
+            }
+
+            else if (color_line==3)
+            {
+                pixel_error=calculate_error(cap,S,0,0,0,180,255,66);
+            }
+        }
+
+
+        if(line==2)
+        {
+            int color_line=colordetection_green(cap,S);
+            cout<<"color_line"<<color_line<<endl;
+
+
+
+            if(color_line==2)
+            {
+                Kp = 1;
+                pixel_error=calculate_error(cap,S,0,140,0,80,255,120);
+                rightMotorBaseSpeed=25;
+                leftMotorBaseSpeed=25;
+                Kp = 0.28;
+            }
+
+            else if (color_line==3)
+            {
+                pixel_error=calculate_error(cap,S,0,0,0,180,255,66);
+                rightMotorBaseSpeed=25;
+                leftMotorBaseSpeed=25;
+            }
+        }
+
+
+        if(line==3)
+        {
+            int color_line=colordetection_red(cap,S);
+            cout<<"color_line"<<color_line<<endl;
+            if(color_line==2)
+            {
+                Kp = 0.35;
+                pixel_error=calculate_error(cap,S,130,200,110,180,255,173);
+                leftMotorBaseSpeed=24;
+                rightMotorBaseSpeed=24;
+                Kp = 0.28;
+            }
+
+
+            else if (color_line==3)
+            {
+                pixel_error=calculate_error(cap,S,0,0,0,180,255,66);
+                rightMotorBaseSpeed=25;
+                leftMotorBaseSpeed=25;
+            }
+        }
+
+
+        if(line==4)
+        {
+            int color_line=colordetection_yellow(cap,S);
+
+
+
+            if(color_line==2)
+            {
+                Kp = 2;
+                pixel_error=calculate_error(cap,S,0,40,100,50,255,255);
+                Kp = 0.28;
+            }
+
+            else if (color_line==3)
+            {
+
+                pixel_error=calculate_error(cap,S,0,0,0,180,255,66);
+            }
+        }
+
+
+
         int color=colordetection(cap,S);
         if(color==2&&counter==0)
         {
             stop();
             servoHeadUp();
-            symbol=Symbol(cap,S);
+            int symbol=Symbol(cap,S);
 
-
+            cout<<"symbol is "<<symbol<<endl;
 
 
             if(symbol==10)
@@ -142,7 +246,7 @@ int main(){
 
 
             servoHeadDown();
-            for(int s=0;s<20;s++)
+            for(int s=0;s<30;s++)
             {
                 cap>>S;
             }
@@ -150,12 +254,97 @@ int main(){
             if(symbol==999)
             {
                 counter++;
-                cout<<symbol<<endl;
                 continue;
-
             }
 
 
+
+
+            else if(symbol==5)
+            {
+                float dis = disMeasure();
+                lcdPosition(lcd,0,0);
+                lcdPuts(lcd, "Distance :");
+                lcdPosition(lcd,0,1);
+                lcdPrintf(lcd, "%0.2f", dis);
+                delay(3000);
+                lcdClear(lcd);
+            }
+
+            else if(symbol==6)
+            {
+                lcdPosition(lcd,0,0);           //Position cursor on the first line in the first column
+                lcdPuts(lcd, "blue");  //Print the text on the LCD at the current cursor postion
+                delay(2000);
+                lcdClear(lcd);
+                line=1;
+            }
+
+            else if(symbol==7)
+            {
+                lcdPosition(lcd,0,0);           //Position cursor on the first line in the first column
+                lcdPuts(lcd, "green");  //Print the text on the LCD at the current cursor postion
+                delay(2000);
+                lcdClear(lcd);
+
+                line=2;
+            }
+
+            else if(symbol==8)
+            {
+                lcdPosition(lcd,0,0);           //Position cursor on the first line in the first column
+                lcdPuts(lcd, "red");  //Print the text on the LCD at the current cursor postion
+                delay(2000);
+                lcdClear(lcd);
+                line=3;
+            }
+
+            else if(symbol==9)
+            {
+                lcdPosition(lcd,0,0);           //Position cursor on the first line in the first column
+                lcdPuts(lcd, "yellow");  //Print the text on the LCD at the current cursor postion
+                delay(2000);
+                lcdClear(lcd);
+
+
+                line=4;
+            }
+
+
+            else if(symbol==11)
+            {
+                lcdPosition(lcd,0,0);           //Position cursor on the first line in the first column
+                lcdPuts(lcd, "Turn L");  //Print the text on the LCD at the current cursor postion
+                delay(3000);
+                lcdClear(lcd);
+
+                sprintf(speedstring, "#Baffff0%d,0%d,0%d,0%d", 20,20,20,20);
+
+                serialPrintf(robot, speedstring);
+                cout<<speedstring<<endl;
+                delay(1000);
+                sprintf(speedstring, "#Barrff0%d,0%d,0%d,0%d", 80,80,80,80);
+
+                serialPrintf(robot, speedstring);
+                cout<<speedstring<<endl;
+                delay(1500);
+            }
+
+            else if(symbol==12)
+            {
+                lcdPosition(lcd,0,0);           //Position cursor on the first line in the first column
+                lcdPuts(lcd, "Turn R");  //Print the text on the LCD at the current cursor postion
+                delay(3000);
+                lcdClear(lcd);
+                sprintf(speedstring, "#Baffff0%d,0%d,0%d,0%d", 20,20,20,20);
+                serialPrintf(robot, speedstring);
+                cout<<speedstring<<endl;
+                delay(1000);
+                sprintf(speedstring, "#Baffrr0%d,0%d,0%d,0%d", 80,80,80,80);
+                serialPrintf(robot, speedstring);
+                cout<<speedstring<<endl;
+                delay(1500);
+            }
 
             //cout<<symbol<<endl;
             counter++;
@@ -165,12 +354,12 @@ int main(){
         }
         else if(color==2&&counter>0)
         {
-            pixel_error=calculate_error(cap,S,0,0,0,180,255,65);
+            pixel_error=calculate_error(cap,S,0,0,0,180,255,70);
             //cout<<"RETURN COLOR"<<color<<endl;
         }
         else
         {
-            pixel_error=calculate_error(cap,S,0,0,0,180,255,65);
+            //pixel_error=calculate_error(cap,S,0,0,0,180,255,70);
             counter=0;
             //cout<<"return color"<<color<<endl;
         }
@@ -237,25 +426,7 @@ int main(){
        // cout<<speedstring<<endl;
 
 
-        // Apply new speed and direction to each motor
-       /* if((leftMotorSpeed-rightMotorSpeed)>30)
-            {
-                leftMotorSpeed = constrain(leftMotorSpeed);
-                rightMotorSpeed = constrain(rightMotorSpeed);
-                turnRight(leftMotorSpeed, rightMotorSpeed);
-            }
-        else if((leftMotorSpeed-rightMotorSpeed)<-30)
-            {
-                leftMotorSpeed = constrain(leftMotorSpeed);
-                rightMotorSpeed = constrain(rightMotorSpeed);
-                turnLeft(leftMotorSpeed, rightMotorSpeed);
-            }
-        else
-        {
-            leftMotorSpeed = constrain(leftMotorSpeed);
-            rightMotorSpeed = constrain(rightMotorSpeed);
-            runForward(leftMotorSpeed, rightMotorSpeed);
-        }*/
+
 
         }
 
@@ -269,7 +440,7 @@ int colordetection(VideoCapture cap,Mat S)
 {
     cap>>S;
     Mat SHSV,SHSV2;
-	Rect rect(0, 0, 640, 180);
+	Rect rect(0, 0, 640, 240);
     S = S(rect);
     cvtColor(S,SHSV,CV_BGR2HSV);
     inRange(SHSV,Scalar(155,140,140),Scalar(167,237,185),SHSV2);
@@ -342,15 +513,20 @@ int colordetection(VideoCapture cap,Mat S)
  int Symbol(VideoCapture cap,Mat S)
  {
 
+
+
     for(int s=0;s<30;s++)
     {
         cap>>S;
     }
 
+    cap.set(CAP_PROP_FRAME_WIDTH,1280);
+    cap.set(CAP_PROP_FRAME_HEIGHT,960);
+
     imshow("s",S);
-    waitKey(50);
+    //waitKey(50);
 
-
+    cap>>S;
 
     //cout<<"capture!!!"<<endl;
     if(!cap.isOpened())
@@ -364,6 +540,8 @@ int colordetection(VideoCapture cap,Mat S)
         cout<<"S is nothing"<<endl;
         return -1;
     }
+    cap.set(CAP_PROP_FRAME_WIDTH,640);
+    cap.set(CAP_PROP_FRAME_HEIGHT,480);
     Mat SHSV;
 
     imwrite("S.jpg", S);
@@ -405,7 +583,7 @@ int colordetection(VideoCapture cap,Mat S)
                 maxArea = index;
             }
 
-            approxPolyDP(contours[index], polyContours[index], 60, true);
+            approxPolyDP(contours[index], polyContours[index], 50, true);
         }
 
     if(polyContours.size()>0){
@@ -424,7 +602,7 @@ int colordetection(VideoCapture cap,Mat S)
     if(polyContours[maxArea].size()==4)
     {
 
-
+    //Point2f srcPoints[4], dstPoints[4];
 
     dstPoints[0] = Point2f(0, 0);
     dstPoints[1] = Point2f(SHSV.cols, 0);
@@ -588,7 +766,7 @@ int calculate_error(VideoCapture cap,Mat S,int Hmin, int Smin, int Vmin, int Hma
 //    imshow("0",SHSV);
  //   waitKey(10);
     white = b;
-   // cout<<"return cal "<<b<<endl;
+    cout<<"return cal "<<b<<endl;
     return b;
     }
 
@@ -658,7 +836,7 @@ int templatematching(Mat outPic)
 
     float highest=0;
     int b;
-        for (int i = 1; i < 12; i++)
+        for (int i = 0; i < 12; i++)
     {
         if (eeee[i] > highest)
             {
@@ -668,7 +846,15 @@ int templatematching(Mat outPic)
     }
     cout<<"highest is "<<highest<<endl;
     cout<<"b+1= "<<b+1<<endl;
-    return b+1;
+    if(highest>=0.2)
+    {
+        return b+1;
+    }
+
+    else if (highest<0.2)
+    {
+        return 13;
+    }
 }
 
 
@@ -698,28 +884,11 @@ void stop(void)
 {
     serialPrintf(robot,"#Ha");
 }
-/*void runForward(int left_speed, int right_speed)
-{
-    sprintf(speedstring, "#Baffff0%d,0%d,0%d,0%d", left_speed, left_speed, right_speed, right_speed);
-    serialPrintf(robot, speedstring);
-    cout<<speedstring<<endl;
-}
-void turnLeft(int left_speed, int right_speed)
-{
-    sprintf(speedstring, "#Barrff0%d,0%d,0%d,0%d", left_speed, left_speed, right_speed, right_speed);
-    serialPrintf(robot, speedstring);
-    printf("l\n");
-}
-void turnRight(int left_speed, int right_speed)
-{
-    sprintf(speedstring, "#Baffrr0%d,0%d,0%d,0%d", left_speed, left_speed, right_speed, right_speed);
-    serialPrintf(robot, speedstring);
-    printf("r\n");
-}*/
+
 int constrain(int speed)
 {
     if(speed>max_speed) speed = max_speed;
-    else if(speed<-60) speed = -60;
+    else if(speed<-80) speed = -80;
 
     else speed = speed;
     return speed;
@@ -734,9 +903,37 @@ int constrain(int speed)
 
  void servoHeadDown(){
      softPwmCreate(servopin, 20, 200);
-     softPwmWrite(servopin,25);
+     softPwmWrite(servopin,24);
      delay(700);
      softPwmStop(servopin);
+ }
+
+  float disMeasure()
+ {
+     struct timeval tv1;
+     struct timeval tv2;
+     long start, stop;
+     float dis;
+
+     digitalWrite(Trig, LOW);
+     delayMicroseconds(2);
+
+     digitalWrite(Trig, HIGH);
+     delayMicroseconds(10);
+     digitalWrite(Trig, LOW);
+
+     while(!(digitalRead(Echo) == 1));
+     gettimeofday(&tv1, NULL);
+
+     while(!(digitalRead(Echo) == 0));
+     gettimeofday(&tv2, NULL);
+
+     start = tv1.tv_sec * 1000000 + tv1.tv_usec;
+     stop  = tv2.tv_sec * 1000000 + tv2.tv_usec;
+
+     dis = 7*(float)(stop - start) / 1000000 * 3400 / 2;
+
+     return dis;
  }
 
 
@@ -764,8 +961,8 @@ int constrain(int speed)
 
     mask1=test;
 
-    mask1 = mask1(Rect(srcPoints[0].x-70,srcPoints[0].y, 70, 90));
-
+    mask1 = mask1(Rect(srcPoints[0].x/2-80,srcPoints[0].y/2, 80, 120));
+    imwrite("mask.jpg",mask1);
     imshow("mask1",mask1);
 
     Mat gray;
@@ -816,6 +1013,305 @@ int constrain(int speed)
     }else{
         cout << "Red" << endl;
     }
-//waitKey(20);
+waitKey(20);
     return number;
  }
+
+
+ int colordetection_blue(VideoCapture cap,Mat S)
+{
+    cap>>S;
+    Mat SHSV,SHSV2;
+	Rect rect(0, 0, 640, 180);
+    S = S(rect);
+    cvtColor(S,SHSV,CV_BGR2HSV);
+    inRange(SHSV,Scalar(80,120,61),Scalar(140,255,110),SHSV2);
+    Mat morphed;
+    Mat kernel = getStructuringElement(MORPH_ELLIPSE, Size(3,3));
+    morphologyEx(SHSV2, morphed, MORPH_OPEN, kernel);
+
+    Mat edge;
+
+    Canny(morphed, edge, 100, 100*3, 3);
+    vector<vector<Point>> contours;    //
+    vector<Vec4i> hierarchy;
+
+    findContours(morphed, contours, hierarchy, RETR_CCOMP, CHAIN_APPROX_SIMPLE);    //
+    if(contours.size()>0)
+    {
+
+    Mat linePic = Mat::zeros(morphed.rows, morphed.cols, CV_8UC3);
+
+    /*for (int index = 0; index < contours.size(); index++)
+        {
+            drawContours(linePic, contours, index, Scalar(0,0,255), 1, 8//hierarchy
+                         );
+        }*/
+
+
+    vector<vector<Point>> polyContours(contours.size());
+    int maxArea = 0;
+    for (int index = 0; index < contours.size(); index++)
+        {
+            if (contourArea(contours[index]) > contourArea(contours[maxArea]))
+            {
+                maxArea = index;
+            }
+
+            approxPolyDP(contours[index], polyContours[index], 5, true);
+        }
+
+    Mat polyPic = Mat::zeros(SHSV.size(), CV_8UC3);
+
+    drawContours(polyPic, polyContours, maxArea, Scalar(0,0,255/*rand() & 255, rand() & 255, rand() & 255*/), 2);
+
+    Point centre;
+    printf("H=%d\t",SHSV.at<Vec3b>(centre)[0]);
+    printf("S=%d\t",SHSV.at<Vec3b>(centre)[1]);
+    printf("V=%d\t",SHSV.at<Vec3b>(centre)[2]);
+    centre=findContourCentre(polyContours[maxArea]);
+    if(SHSV.at<Vec3b>(centre)[0]>0&&SHSV.at<Vec3b>(centre)[1]>0&&SHSV.at<Vec3b>(centre)[2]<255)
+    {
+        return 2;
+           //imshow("5",linePic);
+    //imshow("3",S);
+
+    //imshow("1",polyPic);
+
+
+    //imshow("0",SHSV);
+    //waitKey(10);
+    }
+
+
+    else {return 3;}
+
+    }
+
+
+    else{return 3;}
+}
+
+
+int colordetection_green(VideoCapture cap,Mat S)
+{
+    cap>>S;
+    Mat SHSV,SHSV2;
+	Rect rect(0, 0, 640, 180);
+    S = S(rect);
+    cvtColor(S,SHSV,CV_BGR2HSV);
+    inRange(SHSV,Scalar(0,152,0),Scalar(75,255,105),SHSV2);
+    Mat morphed;
+    Mat kernel = getStructuringElement(MORPH_ELLIPSE, Size(3,3));
+    morphologyEx(SHSV2, morphed, MORPH_OPEN, kernel);
+
+    Mat edge;
+
+    Canny(morphed, edge, 100, 100*3, 3);
+    vector<vector<Point>> contours;    //
+    vector<Vec4i> hierarchy;
+
+    findContours(morphed, contours, hierarchy, RETR_CCOMP, CHAIN_APPROX_SIMPLE);    //
+    if(contours.size()>0)
+    {
+
+    Mat linePic = Mat::zeros(morphed.rows, morphed.cols, CV_8UC3);
+
+    /*for (int index = 0; index < contours.size(); index++)
+        {
+            drawContours(linePic, contours, index, Scalar(0,0,255), 1, 8//hierarchy
+                         );
+        }*/
+
+
+    vector<vector<Point>> polyContours(contours.size());
+    int maxArea = 0;
+    for (int index = 0; index < contours.size(); index++)
+        {
+            if (contourArea(contours[index]) > contourArea(contours[maxArea]))
+            {
+                maxArea = index;
+            }
+
+            approxPolyDP(contours[index], polyContours[index], 5, true);
+        }
+
+    Mat polyPic = Mat::zeros(SHSV.size(), CV_8UC3);
+
+    drawContours(polyPic, polyContours, maxArea, Scalar(0,0,255/*rand() & 255, rand() & 255, rand() & 255*/), 2);
+
+    Point centre;
+    printf("H=%d\t",SHSV.at<Vec3b>(centre)[0]);
+    printf("S=%d\t",SHSV.at<Vec3b>(centre)[1]);
+    printf("V=%d\t",SHSV.at<Vec3b>(centre)[2]);
+    centre=findContourCentre(polyContours[maxArea]);
+    if(SHSV.at<Vec3b>(centre)[0]<181&&SHSV.at<Vec3b>(centre)[1]>0&&SHSV.at<Vec3b>(centre)[2]<256)
+    {
+        return 2;
+           //imshow("5",linePic);
+    //imshow("3",S);
+
+    //imshow("1",polyPic);
+
+
+    //imshow("0",SHSV);
+    //waitKey(10);
+    }
+
+
+    else {return 3;}
+
+    }
+
+
+    else{return 3;}
+}
+
+
+int colordetection_red(VideoCapture cap,Mat S)
+{
+    cap>>S;
+    Mat SHSV,SHSV2;
+	Rect rect(0, 0, 640, 180);
+    S = S(rect);
+    cvtColor(S,SHSV,CV_BGR2HSV);
+    inRange(SHSV,Scalar(130,200,110),Scalar(180,255,173),SHSV2);
+    Mat morphed;
+    Mat kernel = getStructuringElement(MORPH_ELLIPSE, Size(3,3));
+    morphologyEx(SHSV2, morphed, MORPH_OPEN, kernel);
+
+    Mat edge;
+
+    Canny(morphed, edge, 100, 100*3, 3);
+    vector<vector<Point>> contours;    //
+    vector<Vec4i> hierarchy;
+
+    findContours(morphed, contours, hierarchy, RETR_CCOMP, CHAIN_APPROX_SIMPLE);    //
+    if(contours.size()>0)
+    {
+
+    Mat linePic = Mat::zeros(morphed.rows, morphed.cols, CV_8UC3);
+
+    /*for (int index = 0; index < contours.size(); index++)
+        {
+            drawContours(linePic, contours, index, Scalar(0,0,255), 1, 8//hierarchy
+                         );
+        }*/
+
+
+    vector<vector<Point>> polyContours(contours.size());
+    int maxArea = 0;
+    for (int index = 0; index < contours.size(); index++)
+        {
+            if (contourArea(contours[index]) > contourArea(contours[maxArea]))
+            {
+                maxArea = index;
+            }
+
+            approxPolyDP(contours[index], polyContours[index], 5, true);
+        }
+
+    Mat polyPic = Mat::zeros(SHSV.size(), CV_8UC3);
+
+    drawContours(polyPic, polyContours, maxArea, Scalar(0,0,255/*rand() & 255, rand() & 255, rand() & 255*/), 2);
+
+    Point centre;
+    printf("H=%d\t",SHSV.at<Vec3b>(centre)[0]);
+    printf("S=%d\t",SHSV.at<Vec3b>(centre)[1]);
+    printf("V=%d\t",SHSV.at<Vec3b>(centre)[2]);
+    centre=findContourCentre(polyContours[maxArea]);
+    if(SHSV.at<Vec3b>(centre)[0]>0&&SHSV.at<Vec3b>(centre)[1]>0&&SHSV.at<Vec3b>(centre)[2]>0)
+    {
+        return 2;
+           //imshow("5",linePic);
+    //imshow("3",S);
+
+    //imshow("1",polyPic);
+
+
+    //imshow("0",SHSV);
+    //waitKey(10);
+    }
+
+
+    else {return 3;}
+
+    }
+
+
+    else{return 3;}
+}
+
+
+int colordetection_yellow(VideoCapture cap,Mat S)
+{
+    cap>>S;
+    Mat SHSV,SHSV2;
+	Rect rect(0, 0, 640, 180);
+    S = S(rect);
+    cvtColor(S,SHSV,CV_BGR2HSV);
+    inRange(SHSV,Scalar(0,64,120),Scalar(27,255,255),SHSV2);
+    Mat morphed;
+    Mat kernel = getStructuringElement(MORPH_ELLIPSE, Size(3,3));
+    morphologyEx(SHSV2, morphed, MORPH_OPEN, kernel);
+
+    Mat edge;
+
+    Canny(morphed, edge, 100, 100*3, 3);
+    vector<vector<Point>> contours;    //
+    vector<Vec4i> hierarchy;
+
+    findContours(morphed, contours, hierarchy, RETR_CCOMP, CHAIN_APPROX_SIMPLE);    //
+    if(contours.size()>0)
+    {
+
+    Mat linePic = Mat::zeros(morphed.rows, morphed.cols, CV_8UC3);
+
+    /*for (int index = 0; index < contours.size(); index++)
+        {
+            drawContours(linePic, contours, index, Scalar(0,0,255), 1, 8//hierarchy
+                         );
+        }*/
+
+
+    vector<vector<Point>> polyContours(contours.size());
+    int maxArea = 0;
+    for (int index = 0; index < contours.size(); index++)
+        {
+            if (contourArea(contours[index]) > contourArea(contours[maxArea]))
+            {
+                maxArea = index;
+            }
+
+            approxPolyDP(contours[index], polyContours[index], 5, true);
+        }
+
+    //Mat polyPic = Mat::zeros(SHSV.size(), CV_8UC3);
+
+    //drawContours(polyPic, polyContours, maxArea, Scalar(0,0,255/*rand() & 255, rand() & 255, rand() & 255*/), 2);
+
+    Point centre;
+    printf("H=%d\t",SHSV.at<Vec3b>(centre)[0]);
+    printf("S=%d\t",SHSV.at<Vec3b>(centre)[1]);
+    printf("V=%d\t",SHSV.at<Vec3b>(centre)[2]);
+    centre=findContourCentre(polyContours[maxArea]);
+    if(SHSV.at<Vec3b>(centre)[0]<180&&SHSV.at<Vec3b>(centre)[1]>0&&SHSV.at<Vec3b>(centre)[2]>0)
+    {
+        return 2;
+    }
+
+   //imshow("5",linePic);
+    //imshow("3",S);
+
+    //imshow("1",polyPic);
+
+
+    //imshow("0",SHSV);
+   // waitKey(10);
+
+    else {return 3;}
+
+    }
+
+    else{return 3;}
+}
